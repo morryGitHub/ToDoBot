@@ -10,7 +10,7 @@ from aiogram.fsm.state import State, StatesGroup
 
 from data.data_store import tasks_list, reminder_tasks
 from timer.reminder_job import send_reminder
-from keyboards.userkb import build_task_keyboard, build_reminder_keyboard, build_time_keyboard
+from keyboards.userkb import build_task_keyboard, build_reminder_keyboard, build_time_keyboard, build_delete_keyboard
 
 from data.bot import bot  # импортируем объект bot из bot.py
 
@@ -199,6 +199,38 @@ async def done(callback: CallbackQuery):
     await callback.message.answer(f"Задача {task_index} отмечена как выполненная.")
 
 
+@user.message(Command("delete"))
+async def done_task(message: Message):
+    user_id = message.from_user.id
+
+    if user_id not in tasks_list or not tasks_list[user_id]:
+        await message.answer("🗒️ Сначала добавьте задачу с помощью /add.")
+        return
+    keyboard = build_task_keyboard(user_id)
+    await message.answer("📋 Выберите задание которое нужно удалить:", reply_markup=keyboard)
+
+
+@user.callback_query(F.data.startswith('delete'))
+async def done(callback: CallbackQuery):
+    await callback.answer()
+
+    task_index = int(callback.data.split('_')[1])  # номер задачи из callback_data
+    user_id = callback.from_user.id
+
+    # Обновляем текст задачи с отметкой выполнено (например, в списке)
+    tasks = tasks_list.get(user_id, [])
+    if 0 < task_index <= len(tasks):
+        tasks[task_index - 1] = f"{tasks[task_index - 1]}"
+        tasks_list[user_id].pop(task_index - 1)
+
+    # Строим новую клавиатуру с обновлённым текстом кнопок
+    new_markup = build_delete_keyboard(user_id)
+
+    # Обновляем клавиатуру у сообщения
+    await callback.message.edit_reply_markup(reply_markup=new_markup)
+    await callback.message.answer(f"Задача {task_index} удалена.")
+
+
 @user.message(Command("remind"))
 async def set_reminder(message: Message):
     user_id = message.from_user.id
@@ -208,8 +240,6 @@ async def set_reminder(message: Message):
         return
     keyboard = build_reminder_keyboard(user_id)
     await message.answer("📋 Выберите задание которое нужно напомнить:", reply_markup=keyboard)
-
-
 
 
 @user.callback_query(F.data.startswith("remind_"))
